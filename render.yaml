@@ -1,0 +1,47 @@
+# Render Blueprint — FastAPI backend as a long-running web service.
+#
+# Deploy: https://dashboard.render.com/select-repo?type=blueprint
+# Render reads this file, creates the service, and prompts for the values
+# marked `sync: false`. The two `generateValue` secrets are created by Render.
+#
+# Free plan notes:
+#   - The service sleeps after ~15 min without traffic (cold start ~30–60 s).
+#     Keep it awake with an external pinger on /api/health (see DEPLOYMENT.md).
+#   - Keep exactly one uvicorn process: the daily APScheduler sync and the
+#     in-flight sync lock are per-process.
+
+services:
+  - type: web
+    name: jannidhi-backend
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      # --- MongoDB Atlas (paste the SRV string when prompted) -------------
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGO_DB_NAME
+        value: mplads_sentinel
+
+      # --- Auth & admin ----------------------------------------------------
+      - key: AUTH_SECRET
+        generateValue: true          # HMAC key that signs login tokens
+      - key: ADMIN_USERNAME
+        value: Netai
+      - key: ADMIN_PASSWORD
+        sync: false                  # choose the bootstrap admin password
+      - key: CRON_SECRET
+        generateValue: true          # guards GET /api/cron/sync
+
+      # --- Browser access (fill with your Vercel URL, e.g. ---------------
+      #     https://your-project.vercel.app — editable later in the dashboard)
+      - key: CORS_ORIGINS
+        sync: false
+
+      # --- Data pipeline ----------------------------------------------------
+      - key: SEED_FROM_SAMPLE
+        value: "1"                   # seed the bundled sample CSV on empty DB
+      - key: MPLADS_LIVE_HOUSE
+        value: rajya_sabha           # 'both' pulls ~90 MB payloads — heavy for the free tier
